@@ -1,5 +1,9 @@
 # automatic-verilog
 
+This fork of [HonkW93/automatic-verilog](https://github.com/HonkW93/automatic-verilog) includes fixes from October 13-14, 2026: full-path file identities for CrossDir module indexing, typedef/package-qualified struct port connections, same-line and array declarators, and range-free new connections that retain existing expressions on updates. See [Changelog](./Changelog.md) and the [58-case real Vim validation record](./tests/VALIDATION.md).
+
+Struct support generates module port connections. AutoWire does not infer complete struct or multidimensional-array declarations.
+
 ---
 
 ![logo](https://cdn.jsdelivr.net/gh/HonkW93/automatic-verilog@master/demo/logo.png)                                                                                   
@@ -19,13 +23,13 @@ Put all `files&folders` in `plugin` into the `plugin` folder under the root dire
 ### 1.2  vim-plug
 
 ```
-Plug 'HonkW93/automatic-verilog'
+Plug 'MaNan93/automatic-verilog'
 ```
 
 ### 1.3  Vundle
 
 ```
-Plugin 'HonkW93/automatic-verilog'
+Plugin 'MaNan93/automatic-verilog'
 ```
 
 **Note：This script may modify context, please backup your context befroe using in case overwriting**

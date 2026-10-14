@@ -2,7 +2,7 @@
 " Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2023/07/16 17:46
+" Last Modified:  2026/10/14 11:09
 " File:           crossdir.vim
 " Note:           search cross directory by tags/filelist/verilog-library
 "------------------------------------------------------------------------------
@@ -56,14 +56,17 @@ endfor
 " Description:
 "   Get module-file-dir dictionary
 " e.g
-"   files  : file-dir dictionary(.v file)
-"          e.g  ALU.v -> ./hdl/core
+"   files  : absolute-file-path to directory dictionary
+"          e.g  /hdl/core/ALU.v -> /hdl/core
 "   modules: module-file dictionary
-"          e.g  ALU -> ALU.v
+"          e.g  ALU -> /hdl/core/ALU.v
 " Output:
 "   [files,modules]
 "---------------------------------------------------
 function g:AutoVerilog_GetModuleFileDirDic()
+    "Keep discovery order for deterministic precedence when module names repeat.
+    let s:file_order = []
+    let s:file_seen = {}
     "normal
     if g:atv_crossdir_mode == 0
         "Get directory list by scaning line
@@ -94,6 +97,17 @@ endfunction
 
 "{{{1 AutoVerilog_GetModuleFileDirDic Subfunction 子函数
 
+"Use the full path as file identity, retaining same-name files from different dirs.
+function s:AddFile(files,path) abort
+    let file = simplify(fnamemodify(expand(a:path),':p'))
+    let a:files[file] = fnamemodify(file,':h')
+    if !has_key(s:file_seen,file)
+        let s:file_seen[file] = 1
+        call add(s:file_order,file)
+    endif
+    return file
+endfunction
+
 "GetModuleFileDirDicFromTags 从Tags获取文件名-文件夹-模块名关系{{{2
 "--------------------------------------------------
 " Function : GetModuleFileDirDicFromTags
@@ -122,10 +136,10 @@ function s:GetModuleFileDirDicFromTags(file)
                 let vfile = tags_dir.'/'.file
                 let vfile = expand(vfile)
                 let vfile = fnamemodify(vfile,':p')
-                let dir = fnamemodify(vfile,':p:h')
-                let file = fnamemodify(vfile,':p:t')
-                call extend(files,{file : dir})
-                call extend(modules,{module : file})
+                let file = s:AddFile(files,vfile)
+                if !has_key(modules,module)
+                    call extend(modules,{module : file})
+                endif
             else
                 echohl ErrorMsg | echo "No file ".file." exist!"| echohl None
             endif
@@ -219,9 +233,7 @@ function s:GetFileDirDicFromFlist(file)
                 let vfile = expand(vfile)
                 if filereadable(vfile)
                     let vfile = fnamemodify(vfile,':p')
-                    let dir = fnamemodify(vfile,':p:h')
-                    let file = fnamemodify(vfile,':p:t')
-                    call extend (files,{file : dir})
+                    call s:AddFile(files,vfile)
                 else
                     echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
                 endif
@@ -272,7 +284,7 @@ function s:GetFileDirDicFromFlist(file)
             "record expand dir dictionary as g:atv_crossdir_dirs
             call extend(g:atv_crossdir_dirs,{exp_dir : dir})
             "find file
-            call extend (files,{file : exp_dir})
+            call s:AddFile(files,exp_vfile)
         else
             echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
         endif
@@ -313,7 +325,7 @@ function s:GetFileDirDicFromLib(dirlist,rec,vlist,elist)
             "record expand dir dictionary as g:atv_crossdir_dirs
             call extend(g:atv_crossdir_dirs,{exp_dir : dir})
             "find file
-            call extend (files,{file : exp_dir})
+            call s:AddFile(files,exp_vfile)
         else
             echohl ErrorMsg | echo "No file ".vfile." exist!"| echohl None
         endif
@@ -362,11 +374,7 @@ function s:GetFileDirDicFromLibRec(dir,rec,files,elist)
     let filelist = filter(copy(filedirlist),filter_str)
 
     for file in filelist
-        if has_key(a:files,file)
-            "echohl ErrorMsg | echo "Same file ".file." exist in both ".a:dir." and ".a:files[file]."! Only use one as directory"| echohl None
-        else
-            call extend (a:files,{file : a:dir})
-        endif
+        call s:AddFile(a:files,a:dir.'/'.file)
     endfor
 
     if a:rec
@@ -550,20 +558,22 @@ endfunction
 "--------------------------------------------------
 " Function : GetModuleFileDict
 " Input: 
-"   files: file-dir dictionary
-"          e.g  ALU.v -> ./hdl/core
+"   files: absolute-file-path to directory dictionary
+"          e.g  /hdl/core/ALU.v -> /hdl/core
 " Description:
 "   get module-file dictionary from file-dir dictionary
 " Output:
 "   modules: module-file dictionary
-"          e.g  ALU -> ALU.v
+"          e.g  ALU -> /hdl/core/ALU.v; first discovered module definition wins
 "---------------------------------------------------
 function s:GetModuleFileDict(files)
     let modules = {}
-    for file in keys(a:files)
-        let dir = a:files[file]
+    for file in s:file_order
+        if !has_key(a:files,file)
+            continue
+        endif
         "find module in ./hdl/core/ALU.v
-        let lines = readfile(dir.'/'.file)  
+        let lines = readfile(file)
         let module = ''
         let module_flag = 0
         let find_module = 0
@@ -587,9 +597,8 @@ function s:GetModuleFileDict(files)
             endif
             if find_module == 1
                 let find_module = 0
-                if module == ''
-                    call extend(modules,{'NULL' : file})
-                else
+                let module = module == '' ? 'NULL' : module
+                if !has_key(modules,module)
                     call extend(modules,{module : file})
                 endif
             endif

@@ -2,7 +2,7 @@
 " Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2023/06/29 23:13
+" Last Modified:  2026/10/14 11:09
 " File:           autodef.vim
 " Note:           AutoDef function partly from zhangguo's vimscript
 "                 Progress bar based off code from "progressbar widget" plugin by
@@ -1413,6 +1413,7 @@ function s:GetiWire(lines,files,modules,reg_width_names,decl_reg,io_names)
                 if has_key(a:modules,module_name)
                     let file = a:modules[module_name]
                     let dir = a:files[file]
+                    let file = fnamemodify(file,':t')
                     let inst_io_names = g:AutoVerilog_GetIO(readfile(dir.'/'.file),'name')
                 else
                     echohl ErrorMsg | echo "file: ".module_name.".v does not exist in cur dir ".getcwd() | echohl None

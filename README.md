@@ -1,5 +1,15 @@
 # automatic-verilog
 
+本仓库是 [HonkW93/automatic-verilog](https://github.com/HonkW93/automatic-verilog) 的 fork，包含 2026-10-13 至 2026-10-14 的本地修复：
+
+- CrossDir 保留不同目录中的同名文件，再按 `module name` 建立索引；支持目录扫描、filelist 和 tags。
+- AutoInst 支持自定义结构体和包限定类型的端口连接，修复同行多个声明及数组端口遗漏。
+- 新连接默认不附加位宽范围；更新时保留已有范围、重命名信号和连接表达式。
+- 代码采用 LF 换行，并提供 58 项真实 Vim 回归测试。
+
+详细改动见 [Changelog](./Changelog.md)，安装与配置见 [修复说明](./FIX_README.md)，测试证据与运行命令见 [验证记录](./tests/VALIDATION.md)。
+结构体支持仅生成端口连接；AutoWire 尚不支持完整推断结构体和多维数组的变量声明。
+
 ---
 
 ![logo](https://cdn.jsdelivr.net/gh/HonkW93/automatic-verilog@master/demo/logo.png)                                                                                   
@@ -19,13 +29,13 @@
 ### 1.2  vim-plug
 
 ```
-Plug 'HonkW93/automatic-verilog'
+Plug 'MaNan93/automatic-verilog'
 ```
 
 ### 1.3  Vundle
 
 ```
-Plugin 'HonkW93/automatic-verilog'
+Plugin 'MaNan93/automatic-verilog'
 ```
 
 **提示：此脚本可能会修改文本数据，请在使用前备份数据，防止数据覆盖等情况发生。**

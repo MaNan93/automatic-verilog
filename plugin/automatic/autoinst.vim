@@ -2,7 +2,7 @@
 " Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2023/08/03 18:12
+" Last Modified:  2026/10/14 11:09
 " File:           autoinst.vim
 " Note:           AutoInst function partly from zhangguo's vimscript
 "------------------------------------------------------------------------------
@@ -26,6 +26,7 @@ let s:VlogTypePort = s:VlogTypePort . '\<inout\>'
 "Data 数据类型
 let s:VlogTypeData =                  '\<wire\>\|'
 let s:VlogTypeData = s:VlogTypeData . '\<reg\>\|'
+let s:VlogTypeData = s:VlogTypeData . '\<logic\>\|'
 let s:VlogTypeData = s:VlogTypeData . '\<parameter\>\|'
 let s:VlogTypeData = s:VlogTypeData . '\<localparam\>\|'
 let s:VlogTypeData = s:VlogTypeData . '\<defparam\>\|'
@@ -157,7 +158,7 @@ let g:_ATV_AUTOINST_DEFAULTS = {
             \'incl_ifdef':  1,    
             \'95_support':  0,    
             \'itf_support': 0,    
-            \'incl_width':  1
+            \'incl_width':  0
             \}
 for s:key in keys(g:_ATV_AUTOINST_DEFAULTS)
     if !exists('g:atv_autoinst_' . s:key)
@@ -250,6 +251,7 @@ function! g:AutoInst(mode)
         if has_key(modules,module_name)
             let file = modules[module_name]
             let dir = files[file]
+            let file = fnamemodify(file,':t')
             "read file
             let lines = readfile(dir.'/'.file)
             "reserve only module lines, in case of multiple module in same file
@@ -438,6 +440,7 @@ endfunction
 "   [type, sequence, io_dir, width1, width2, signal_name, last_port, line, width, first_port ]
 "---------------------------------------------------
 function g:AutoVerilog_GetIO(lines,mode)
+    let lines = copy(a:lines)
     let idx = 0
     let seq = 0
     let wait_module = 1
@@ -447,13 +450,13 @@ function g:AutoVerilog_GetIO(lines,mode)
     let io_seqs = {}
 
     "get io seqs from line {{{3
-    while idx < len(a:lines)
+    while idx < len(lines)
         let idx = idx + 1
-        let idx = g:AutoVerilog_SkipCommentLine(2,idx,a:lines)  "skip pair comment line
+        let idx = g:AutoVerilog_SkipCommentLine(2,idx,lines)  "skip pair comment line
         if idx == -1
             echohl ErrorMsg | echo "Error when SkipCommentLine! return -1"| echohl None
         endif
-        let line = a:lines[idx-1]
+        let line = lines[idx-1]
 
         "find module first
         if line =~ '^\s*module'
@@ -513,11 +516,17 @@ function g:AutoVerilog_GetIO(lines,mode)
             "input/output/inout ports{{{4
             elseif line =~ '^\s*'. s:VlogTypePorts || line =~ '^\s*(\s*'.s:VlogTypePorts || line =~ '^\s*,\s*'.s:VlogTypePorts
                 let wait_port = 0
+                "Parse each explicit ANSI declaration separately; keep inherited names together.
+                let line = substitute(line,'\/\*.\{-\}\*\/','','g')
+                let line = substitute(line,'\/\/.*$','','')
+                let declarations = split(line,',\ze\s*'.s:VlogTypePorts,1)
+                if len(declarations) > 1
+                    call extend(lines,declarations[1:],idx)
+                    let line = declarations[0]
+                endif
                 "delete abnormal
                 if line =~ '\<signed\>\|\<unsigned\>'
                     let line = substitute(line,'\<signed\>\|\<unsigned\>','','')
-                elseif line =~ '\/\/.*$'
-                    let line = substitute(line,'\/\/.*$','','')
                 endif
 
                 "type reg/wire
@@ -562,15 +571,18 @@ function g:AutoVerilog_GetIO(lines,mode)
                 let line = substitute(line,'\<reg\>\|\<wire\>\|\<real\>\|\<logic\>','','')
                 let line = substitute(line,'\[.\{-\}\]','','')
 
+                "A remaining type prefix denotes an aggregate or other named data type.
+                let named_type = line =~ '^\s*[(,]\=\s*\h\w*\%(::\h\w*\)*\s\+\h\w*'
+
                 "ignore list like input [7:0] a[7:0];
                 if line =~ '\[.*\]'
                     let width1 = 'c0'
                     let width2 = 'c0'
-                    let line = substitute(line,'\[.*\]','','')
+                    let line = substitute(line,'\[.\{-\}\]','','g')
                 endif
 
                 "get width string
-                if g:atv_autoinst_incl_width == 0       "if config,never output width
+                if g:atv_autoinst_incl_width == 0 || named_type "connect named types as whole objects
                     let width = ''
                 elseif width2 == 'c0'
                     if width1 == 'c0' 
@@ -587,8 +599,8 @@ function g:AutoVerilog_GetIO(lines,mode)
                 "for types like input aa,bb,cc;
                 let names = split(line,',')
                 for name in names
-                    let name = substitute(name,'\s*','','g')          "delete redundant space
-                    let name = matchstr(name,'\w\+')
+                    "The declarator is the last identifier, after any built-in or named type.
+                    let name = matchstr(name,'\<\h\w*\>\ze\s*[);]*\s*$')
                     if name != ''
                         "dict       [type,sequence,io_dir, width1, width2, signal_name, last_port, line, width, first_port ]
                         let value = [type,seq,     io_dir, width1, width2, name,        0,         '',   width, '']
@@ -862,7 +874,8 @@ function s:GetChangedInstIO(lines,io_names)
                     let conn_inst = name.width
                 endif
                 "keep inst by signal name or by signal change
-                if g:atv_autoinst_keep_name == 0
+                "Without automatic ranges, preserve existing same-name connection expressions.
+                if g:atv_autoinst_keep_name == 0 || g:atv_autoinst_incl_width == 0
                     if conn_inst != conn
                         call extend(cinst_names,{inst_name : conn})
                     endif

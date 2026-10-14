@@ -1,6 +1,35 @@
 # Changelog
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Fork fixes] - 2026-10-14
+
+### Fixed
+
+- CrossDir 用完整源文件路径作为文件标识，保留不同目录中的同名文件，再按模块声明中的 `module name` 建立索引。
+  例如 `rtl_a/common.sv` 中的 `alpha` 和 `rtl_b/common.sv` 中的 `beta` 现在均能找到。
+- 支持普通/递归目录搜索、显式文件、filelist、嵌套 filelist 和 tags；重复路径去重。
+  模块名本身重复时，选择按配置/搜索顺序遇到的第一个定义。
+- 同步更新 AutoInst、AutoPara、AutoParaValue、AutoWire 和 RtlTree 对完整路径索引的使用，更新时应复制整个 `plugin/` 目录的内容。
+- 补齐 AutoInst 的 `logic` 关键词，修复同行重复声明和混合类型、方向、位宽的解析。
+  当前源仓库已具备基础的单个 `logic` 端口支持，此 fork 修复其剩余解析问题。
+- 改为提取声明中的变量名，支持 typedef struct、包限定类型、嵌套结构体及结构体数组的模块端口连接。
+- 逐个移除数组范围，修复贪婪正则误删同行后续端口；先清理注释，再处理 signed/unsigned。
+
+### Changed
+
+- `g:atv_autoinst_incl_width` 默认值改为 `0`：新生成 `.data(data)`，不自动添加范围。
+- 更新时保留已有 `.data(data[31:0])`、部分范围、重命名连接、拼接和函数表达式；默认 `keep_chg = 1`。
+  显式设置 `incl_width = 1` 仍可使用原先自动附加范围的行为。
+- 文件使用 UTF-8 无 BOM、LF 换行；添加 `.gitattributes` 和 `.editorconfig`。
+- 更新 `automatic.vim` 文件头记录、安装说明和回归测试文档。
+
+### Validation
+
+- 真实 Vim 9.1（patches 1-1914，Windows/MSYS）加载插件并调用实际函数：**58/58 通过**。
+- 覆盖 logic/参数/CrossDir 17 项、多维数组连接 9 项、结构体连接 13 项、连接保留 10 项、同名文件索引 9 项。
+- 结构体功能仅生成端口连接，不生成结构体变量声明；现有 IO 元数据仍未保存完整多维类型信息。
+  详见 [验证记录](./tests/VALIDATION.md)。
+
 ## [1.5.1] - 2022-08-05
 
 ### Changed
