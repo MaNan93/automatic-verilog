@@ -2,7 +2,7 @@
 " Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2026/10/14 11:09
+" Last Modified:  2026/10/14 14:15
 " File:           automatic.vim
 " Note:           1. Auto function based on zhangguo's vimscript, heavily modified
 "                 2. Rtl Tree based on zhangguo's vimscript, slightly modified
@@ -30,6 +30,10 @@
 " 2026/10/14    Codex           1.5.x-local             Index same-name source files by full paths and module names
 "                                                       Keep first discovered definition when module names repeat
 "                                                       Update AutoInst/AutoPara/AutoWire/RtlTree; verified 58 real-Vim cases
+" 2026/10/14    Codex           1.5.x-local             Fix AutoWire filtering of existing logic/reg and typed signals
+"                                                       Parse array/multiline/initialized declarations; refresh generated logic
+"                                                       Preserve manual declarations and remove stale generated signals
+"                                                       Verified 82 real-Vim cases, including 24 AutoWire regressions
 " For vim version 7.x or above
 "-----------------------------------------------------------------------------
 

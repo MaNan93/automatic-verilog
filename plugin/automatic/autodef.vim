@@ -2,7 +2,7 @@
 " Vim Plugin for Verilog Code Automactic Generation 
 " Author:         HonkW
 " Website:        https://honk.wang
-" Last Modified:  2026/10/14 11:09
+" Last Modified:  2026/10/14 14:15
 " File:           autodef.vim
 " Note:           AutoDef function partly from zhangguo's vimscript
 "                 Progress bar based off code from "progressbar widget" plugin by
@@ -1706,75 +1706,105 @@ endfunction
 "    //End of automatic wire
 "
 " Output:
-"   decl_wire : wire declared outside /*autowire*/
-"   auto_wire : wire declared inside /*autowire*/
+"   decl_wire : signals declared outside the automatic wire block
+"   auto_wire : signals declared inside the automatic wire block
 " e.g.
 "   decl_wire = [m,n]
 "   auto_wire = [a,qqq,iwire]
 "---------------------------------------------------
+"Split only at top-level separators: commas inside initializers are not names.
+function s:SplitDecl(text, separator)
+    let parts = []
+    let start = 0
+    let depth = 0
+    let quoted = 0
+    let escaped = 0
+    let idx = 0
+    for char in split(a:text,'\zs')
+        if quoted
+            if escaped
+                let escaped = 0
+            elseif char ==# '\'
+                let escaped = 1
+            elseif char ==# '"'
+                let quoted = 0
+            endif
+        elseif char ==# '"'
+            let quoted = 1
+        elseif char =~ '[([{]'
+            let depth += 1
+        elseif char =~ '[])}]'
+            let depth -= 1
+        elseif char ==# a:separator && depth == 0
+            call add(parts,strpart(a:text,start,idx-start))
+            let start = idx + 1
+        endif
+        let idx += strlen(char)
+    endfor
+    call add(parts,strpart(a:text,start))
+    return parts
+endfunction
+
+"Preserve quoted strings while removing comments and recording wire boundaries.
+function s:DeclComment(text)
+    if a:text[0] ==# '"'
+        return a:text
+    elseif a:text =~ '^//Start of automatic wire'
+        return ';@wire_start;'
+    elseif a:text =~ '^//End of automatic wire'
+        return ';@wire_end;'
+    endif
+    return ' '
+endfunction
+
 function s:GetDeclWire(lines)
     let decl_wire = []
     let auto_wire = []
-    let idx = 1
-
-    while idx < len(a:lines)
-        "skip comment line
-        let idx = g:AutoVerilog_SkipCommentLine(2,idx,a:lines)
-        if idx == -1
-            echohl ErrorMsg | echo "Error when SkipCommentLine! return -1"| echohl None
-        endif
-        let line = a:lines[idx-1]
-
-        "comment detect,judege if it's start
-        if line =~ '\/\/.*$'
-            if line =~ '\/\/Start of automatic wire'
-                "start of autowire
-                while 1
-                    let idx = idx + 1
-                    let line = getline(idx)
-                    "end of autowire
-                    if line =~ '\/\/End of automatic wire'
-                        break
-                    "abnormal end
-                    elseif line =~ 'endmodule' || idx == line('$')
-                        echohl ErrorMsg | echo "Error running GetDeclWire! Get //Start of automatic wire but abonormally quit!"| echohl None
-                        break
-                    "middle
-                    elseif line =~ '^\s*wire'
-                        let name = matchstr(line,'^\s*wire\s\+\(\[.*\]\)\?\s*\zs\w\+\ze')
-                        call add(auto_wire,name)
-                    endif
-                endwhile
-            else
-                "delete comment
-                let line = substitute(line,'\/\/.*$','','')
+    "Keep block boundaries while removing comments from the supplied source.
+    let text = substitute(join(a:lines,"\n"),'"\%([^"\\]\|\\.\)*"\|/\*\_.\{-}\*/\|//[^\n]*',
+                \ '\=s:DeclComment(submatch(0))','g')
+    "As before, declarations in conditional compilation branches are collected.
+    let text = substitute(text,'\(^\|\n\)\s*`\%(ifdef\|ifndef\|elsif\|else\|endif\)\>[^\n]*',' ','g')
+    let text = substitute(text,'\n',' ','g')
+    let statements = s:SplitDecl(text,';')
+    let types = ['wire','tri','tri0','tri1','wand','wor','triand','trior','trireg',
+                \ 'uwire','reg','logic','bit','byte','shortint','int','longint',
+                \ 'integer','time','real','shortreal','realtime','string',
+                \ 'signed','unsigned','var','const','static','automatic']
+    "Local typedefs (including structs) and package-qualified types.
+    for statement in statements
+        if statement =~ '^\s*typedef\>'
+            let alias = matchstr(statement,'\h\w*\ze\s*$')
+            if !empty(alias)
+                call add(types,alias)
             endif
         endif
-
-        "match wire[1:0]a; or wire b;
-        let wire_pattern = '^\s*wire\s*\(\[.\{-\}\]\)\s*.\{-\}\s*;\s*'.'\|'.'^\s*wire\s\+.\{-\}\s*;\s*'
-        let match_pattern = '^\s*wire\s*\(\[.\{-\}\]\)\s*\zs.\{-\}\ze\s*;\s*'.'\|'.'^\s*wire\s\+\zs.\{-\}\ze\s*;\s*'
-
-        while line =~ wire_pattern
-            "delete abnormal
-            if line =~ '\<signed\>\|\<unsigned\>'
-                let line = substitute(line,'\<signed\>\|\<unsigned\>','','')
+    endfor
+    let type_pattern = '\%(' . join(types,'\|') . '\|\h\w*\%(::\h\w*\)\+\)\>'
+    let prefix = '^\s*\%(' . type_pattern . '\s*\)\+'
+    let automatic = 0
+    for statement in statements
+        if statement =~ '^\s*@wire_start\s*$'
+            let automatic = 1
+            continue
+        elseif statement =~ '^\s*@wire_end\s*$'
+            let automatic = 0
+            continue
+        elseif statement !~ prefix
+            continue
+        endif
+        let names = substitute(statement,prefix,'','')
+        "Remove packed dimensions independently; retain unpacked declarators.
+        let names = substitute(names,'^\s*\%(\[[^]]*\]\s*\)*','','')
+        for declarator in s:SplitDecl(names,',')
+            let name = matchstr(declarator,'^\s*\zs\h\w*')
+            let tail = substitute(declarator,'^\s*\h\w*\s*\%(\[[^]]*\]\s*\)*','','')
+            if !empty(name) && (empty(tail) || tail =~ '^=')
+                call add(automatic ? auto_wire : decl_wire,name)
             endif
-            let names = matchstr(line,match_pattern)
-            "in case style of wire a = {b,c,d};
-            let names = substitute(names,'\(\/\/\)\@<!=.*$','','')
-            "in case style of wire [1:0] a,b,c;
-            for name in split(names,',')
-                let name = matchstr(name,'\w\+')
-                call add(decl_wire,name)
-            endfor
-            let line = substitute(line,wire_pattern,'','')
-        endwhile
-
-        let idx = idx + 1
-    endwhile
-
-    return [decl_wire,auto_wire] 
+        endfor
+    endfor
+    return [decl_wire,auto_wire]
 endfunction
 "}}}2
 

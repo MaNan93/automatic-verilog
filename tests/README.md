@@ -118,7 +118,19 @@ and precedence for repeated module names. The same two `common.sv` files are
 checked through AutoInst, AutoPara, AutoParaValue, AutoWire and RtlTree.
 One file also contains multiple modules. Source RTL remains unchanged.
 
-Combined: **58/58 PASS**. Run the additional suites with the same Vim flags
+The AutoWire extension passes **24/24** cases in `tests/test_autowire_declared.vim`:
+existing wire/logic/reg, signedness, packed/unpacked arrays, multiple and multiline
+declarations, initialized lists, comments, local typedef structs and package types,
+assign and instance inference, repeated updates, stale-signal removal and repair of
+an existing duplicate inside the generated block. It also checks that references
+in initializers and struct fields do not suppress missing module signals.
+Manual declarations are preserved; the automatic wire block is regenerated.
+Unmodified fork commit `5b44ca8` passed only **4/24**, with real generated duplicates.
+Output defaults to `test-results/autowire/`; recorded comparisons are under
+`test-results/autowire-before/` and `test-results/autowire-after/`.
+`AUTOWIRE_PLUGIN_ROOT` and `AUTOWIRE_REPORT_DIR` select comparison sources/reports.
+
+Combined: **82/82 PASS**. Run the additional suites with the same Vim flags
 as the logic suite. Struct output defaults to `test-results/struct/` and the
 multidimensional output to `test-results/multidim/`.
 Connection-update output defaults to `test-results/connections/`; recorded

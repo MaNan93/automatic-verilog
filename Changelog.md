@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- 修复 AutoWire 漏识别已有 `logic` 声明而重复生成同名信号的问题；assign 推断路径也过滤已有 `reg`。
+- 按完整声明提取信号名，兼容 signed、packed/unpacked 数组、同行/跨行声明、多个带初始化的变量、局部 typedef 和包限定类型。
+  自动生成区内已有的 `logic` 正确计入更新列表；区外的手写声明保留，区内的失效声明重新计算后删除。
 - CrossDir 用完整源文件路径作为文件标识，保留不同目录中的同名文件，再按模块声明中的 `module name` 建立索引。
   例如 `rtl_a/common.sv` 中的 `alpha` 和 `rtl_b/common.sv` 中的 `beta` 现在均能找到。
 - 支持普通/递归目录搜索、显式文件、filelist、嵌套 filelist 和 tags；重复路径去重。
@@ -25,8 +28,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Validation
 
-- 真实 Vim 9.1（patches 1-1914，Windows/MSYS）加载插件并调用实际函数：**58/58 通过**。
-- 覆盖 logic/参数/CrossDir 17 项、多维数组连接 9 项、结构体连接 13 项、连接保留 10 项、同名文件索引 9 项。
+- 真实 Vim 9.1（patches 1-1914，Windows/MSYS）加载插件并调用实际函数：**82/82 通过**。
+- 覆盖 logic/参数/CrossDir 17 项、多维数组连接 9 项、结构体连接 13 项、连接保留 10 项、同名文件索引 9 项、AutoWire 已有声明过滤与更新 24 项。
 - 结构体功能仅生成端口连接，不生成结构体变量声明；现有 IO 元数据仍未保存完整多维类型信息。
   详见 [验证记录](./tests/VALIDATION.md)。
 

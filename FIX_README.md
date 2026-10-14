@@ -12,6 +12,7 @@
 - 修复 signed 和注释的清理。
 - 新连接默认不自动添加位宽范围；更新时保留已有连接表达式和范围。
 - 不同目录中的同名文件按完整路径保留，再按 module name 建立模块索引。
+- AutoWire 识别已有 wire/logic/reg、数组、局部 typedef 和包限定类型声明，避免重复生成；自动区内的 logic 仍能更新。
 
 结构体功能仅生成模块端口连接，不自动生成结构体变量声明。
 多维数组测试验证的是连接结果，现有 IO 数据结构仍未保存完整维度信息。
@@ -25,7 +26,7 @@ automatic-verilog/
 │  └─ automatic/
 │     └─ autoinst.vim           # 核心修复
 ├─ tests/                      # 真实 Vim 测试脚本及说明
-├─ tests/VALIDATION.md          # 58 项真实 Vim 验证记录
+├─ tests/VALIDATION.md          # 82 项真实 Vim 验证记录
 └─ test-results/               # 本地运行测试后生成，不纳入 Git
 ```
 
@@ -87,6 +88,17 @@ modules = { 'alpha': '/project/rtl_a/common.sv', 'beta': '/project/rtl_b/common.
 更新时请复制完整 `plugin/` 目录的内容，确保 CrossDir、AutoInst、AutoPara、
 AutoWire/AutoDef 和 RtlTree 使用一致的索引格式，再重启 Vim/GVim。
 
+## AutoWire 已有声明的处理
+
+在父模块中放置 `/*autowire*/`，执行 `:call g:AutoWire()`。
+`//Start of automatic wire` 到 `//End of automatic wire` 之间为插件管理区，
+每次执行都会重新生成；需要保留的手写声明应放在该区域之外，标记前后均可。
+
+现在 `wire [7:0] data;`、`logic [7:0] data;`、`reg [7:0] data;`、
+数组声明、局部 typedef 变量和 `pkg::packet_t data;` 都能参与已有信号过滤。
+这项修复只识别已有声明，不扩展结构体或完整多维类型的自动推断。
+当前识别局部 typedef 和包限定类型，不解析外部包的 `import` 来建立完整类型符号表。
+
 ## Linux 和换行符
 
 本仓库的代码和文档统一使用 UTF-8 无 BOM、LF 换行符。
@@ -112,10 +124,11 @@ cp -r plugin/. ~/.vim/plugin/
 & '<vim.exe路径>' -Nu NONE -i NONE -n -es -S tests/test_autoinst_struct.vim
 & '<vim.exe路径>' -Nu NONE -i NONE -n -es -S tests/test_autoinst_connections.vim
 & '<vim.exe路径>' -Nu NONE -i NONE -n -es -S tests/test_crossdir_module_index.vim
+& '<vim.exe路径>' -Nu NONE -i NONE -n -es -S tests/test_autowire_declared.vim
 ```
 
 已通过 logic/参数/CrossDir 17 项、多维数组连接 9 项、结构体连接 13 项，
-另有连接保留行为 10 项、同名文件模块索引 9 项，合计 58 项。
+另有连接保留行为 10 项、同名文件模块索引 9 项、AutoWire 已有声明过滤与更新 24 项，合计 82 项。
 各脚本退出码为 0 表示通过。
 测试详细说明见 `tests/README.md`。
 
